@@ -1,0 +1,37 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo_url:
+        description: 'GitHub Repo URL'
+        required: true
+        default: 'https://github.com/neilisaac/AndroidSettlers'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout builder
+        uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Clone target repo
+        run: git clone ${{ github.event.inputs.repo_url }} app
+      
+      - name: Build APK
+        run: |
+          cd app
+          chmod +x gradlew
+          ./gradlew assembleDebug || ./gradlew build
+      
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/app/build/outputs/apk/debug/*.apk
