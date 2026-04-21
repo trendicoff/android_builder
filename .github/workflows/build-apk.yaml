@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK for Android 15
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -21,21 +21,58 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '11'  # Ant needs Java 11, not 17
+          java-version: '11'
       
       - name: Install Ant
         run: sudo apt-get update && sudo apt-get install -y ant
       
+      - name: Setup Android SDK
+        run: |
+          wget https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          unzip commandlinetools-linux-11076708_latest.zip
+          mkdir -p android-sdk/cmdline-tools
+          mv cmdline-tools android-sdk/cmdline-tools/latest
+          export ANDROID_HOME=$PWD/android-sdk
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "PATH=$PATH" >> $GITHUB_ENV
+          
+          # Accept licenses (quietly)
+          yes | sdkmanager --licenses > /dev/null 2>&1
+          
+          # Install build-tools and platform for API 19 (Android 4.4)
+          sdkmanager "build-tools;19.1.0" "platforms;android-19"
+      
       - name: Clone target repo
         run: git clone ${{ github.event.inputs.repo_url }} app
+      
+      - name: Fix local.properties
+        run: |
+          cd app
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+      
+      - name: Patch AndroidManifest for Android 15 compatibility
+        run: |
+          cd app
+          # Update target SDK from 19 to 35 (Android 15)
+          sed -i 's/android:targetSdkVersion="19"/android:targetSdkVersion="35"/' AndroidManifest.xml
+          
+          # Add extractNativeLibs flag to application tag
+          sed -i '/<application / s|>| android:extractNativeLibs="true">|' AndroidManifest.xml
+          
+          # Add 64-bit support flag (helps with compatibility)
+          sed -i '/<application / s|>| android:useEmbeddedDex="true">|' AndroidManifest.xml
+          
+          echo "AndroidManifest.xml patched for Android 15"
+          cat AndroidManifest.xml | grep -E "(targetSdkVersion|extractNativeLibs|useEmbeddedDex)"
       
       - name: Build with Ant
         run: |
           cd app
-          ant debug  # This builds the APK using Ant
+          ant debug
       
       - name: Find and upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
-          path: app/bin/*-debug.apk  # Ant's output folder
+          name: AndroidSettlers-Android15-Patched
+          path: app/bin/*-debug.apk
