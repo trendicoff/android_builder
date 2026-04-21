@@ -1,6 +1,6 @@
 name: Build Android APK
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # <-- Add this line
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 on:
   workflow_dispatch:
@@ -17,23 +17,25 @@ jobs:
       - name: Checkout builder
         uses: actions/checkout@v4
       
-      - name: Setup Java
+      - name: Setup Java 11
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '11'  # Ant needs Java 11, not 17
+      
+      - name: Install Ant
+        run: sudo apt-get update && sudo apt-get install -y ant
       
       - name: Clone target repo
         run: git clone ${{ github.event.inputs.repo_url }} app
       
-      - name: Build APK
+      - name: Build with Ant
         run: |
           cd app
-          chmod +x gradlew
-          ./gradlew assembleDebug || ./gradlew build
+          ant debug  # This builds the APK using Ant
       
-      - name: Upload APK
+      - name: Find and upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
-          path: app/app/build/outputs/apk/debug/*.apk
+          path: app/bin/*-debug.apk  # Ant's output folder
